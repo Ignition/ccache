@@ -33,6 +33,7 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <vector>
 
 namespace fs = util::filesystem;
 
@@ -1441,6 +1442,74 @@ TEST_CASE("-Xarch_device with -Xarch_x86_64 is too hard")
 
   REQUIRE(!result);
   CHECK(result.error() == Statistic::unsupported_compiler_option);
+}
+
+TEST_CASE("-fprebuilt-module-path= hashes the module files in the directory")
+{
+  TestContext test_context;
+  Context ctx;
+  REQUIRE(util::write_file("foo.cpp", ""));
+  REQUIRE(fs::create_directory("pm"));
+  REQUIRE(util::write_file("pm/b.pcm", ""));
+  REQUIRE(util::write_file("pm/a.pcm", ""));
+  REQUIRE(util::write_file("pm/notes.txt", ""));
+
+  ctx.orig_args =
+    Args::from_string("clang -fprebuilt-module-path=pm -c foo.cpp");
+
+  const auto result = process_args(ctx);
+
+  REQUIRE(result);
+  // Sorted, so that the hash does not depend on the order the directory is
+  // read in.
+  CHECK(ctx.args_info.searched_module_files
+        == std::vector<fs::path>{"pm/a.pcm", "pm/b.pcm"});
+}
+
+TEST_CASE("-fprebuilt-module-path= for a missing directory has no inputs")
+{
+  TestContext test_context;
+  Context ctx;
+  REQUIRE(util::write_file("foo.cpp", ""));
+
+  ctx.orig_args =
+    Args::from_string("clang -fprebuilt-module-path=absent -c foo.cpp");
+
+  const auto result = process_args(ctx);
+
+  REQUIRE(result);
+  CHECK(ctx.args_info.searched_module_files.empty());
+}
+
+TEST_CASE("-fprebuilt-module-path= naming a file has no inputs")
+{
+  TestContext test_context;
+  Context ctx;
+  REQUIRE(util::write_file("foo.cpp", ""));
+  REQUIRE(util::write_file("notadir", ""));
+
+  ctx.orig_args =
+    Args::from_string("clang -fprebuilt-module-path=notadir -c foo.cpp");
+
+  const auto result = process_args(ctx);
+
+  REQUIRE(result);
+  CHECK(ctx.args_info.searched_module_files.empty());
+}
+
+TEST_CASE("-fprebuilt-implicit-modules is uncacheable")
+{
+  TestContext test_context;
+  Context ctx;
+  REQUIRE(util::write_file("foo.cpp", ""));
+
+  ctx.orig_args =
+    Args::from_string("clang -fprebuilt-implicit-modules -c foo.cpp");
+
+  const auto result = process_args(ctx);
+
+  REQUIRE(!result);
+  CHECK(result.error() == Statistic::could_not_use_modules);
 }
 
 TEST_SUITE_END();

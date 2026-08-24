@@ -45,6 +45,7 @@
 #include <cstdlib>
 #include <iterator>
 #include <optional>
+#include <system_error>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -1183,6 +1184,47 @@ process_option_arg(const Context& ctx,
     args_info.sanitize_ignorelists.emplace_back(*path);
     auto relpath = core::make_relative_path(ctx, *path);
     state.add_common_arg(FMT("{}={}", option, relpath));
+    return Statistic::none;
+  }
+
+  if (arg == "-fprebuilt-implicit-modules") {
+    // Clang looks up implicit modules in a subdirectory layout named by
+    // hashes of compiler internals, so the module files read by the
+    // compilation cannot be determined.
+    LOG("Cannot determine the module files read with {}", args[i]);
+    return Statistic::could_not_use_modules;
+  }
+
+  if (arg.starts_with("-fprebuilt-module-path=")) {
+    // Clang resolves an import by looking for <dir>/<module-name>.pcm, not
+    // descending into subdirectories. The command line does not say which of
+    // those files the compilation reads, so all of them are hashed. This costs
+    // a hit when an unrelated module file in the same directory changes.
+    constexpr std::string_view prebuilt_module_path_flag =
+      "-fprebuilt-module-path=";
+    const fs::path dir(arg.substr(prebuilt_module_path_flag.size()));
+
+    std::vector<fs::path> candidates;
+    std::error_code ec;
+    for (const auto& entry : fs::directory_iterator(dir, ec)) {
+      if (entry.path().extension() == ".pcm") {
+        candidates.push_back(entry.path());
+      }
+    }
+    // A path that is missing or is not a directory has no module files to
+    // hash. Any other error means that the files read are unknown.
+    if (ec && ec != std::errc::no_such_file_or_directory
+        && ec != std::errc::not_a_directory) {
+      LOG("Failed to read prebuilt module path {}: {}", dir, ec.message());
+      return Statistic::could_not_use_modules;
+    }
+    // Sort to make the hash independent of the order the directory is read in.
+    std::sort(candidates.begin(), candidates.end());
+    for (auto& candidate : candidates) {
+      args_info.searched_module_files.push_back(std::move(candidate));
+    }
+
+    state.add_common_arg(args[i]);
     return Statistic::none;
   }
 
