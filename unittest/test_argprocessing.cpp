@@ -1657,4 +1657,42 @@ TEST_CASE("-fprebuilt-implicit-modules is cacheable with modules sloppiness")
   CHECK(result);
 }
 
+TEST_CASE("-fmodules without dependency output is uncacheable")
+{
+  TestContext test_context;
+  Context ctx;
+  ctx.config.update_from_map({
+    {"sloppiness", "modules"}
+  });
+  ctx.config.set_depend_mode(true);
+  REQUIRE(util::write_file("foo.cpp", ""));
+
+  ctx.orig_args = Args::from_string("gcc -fmodules -c foo.cpp");
+
+  const auto result = process_args(ctx);
+
+  // Depend mode is what records the module files the compilation reads, and it
+  // is only in effect when the compilation writes dependency information.
+  // Without it nothing describing the imported modules is hashed.
+  REQUIRE(!result);
+  CHECK(result.error() == Statistic::could_not_use_modules);
+}
+
+TEST_CASE("-fmodules with dependency output is cacheable")
+{
+  TestContext test_context;
+  Context ctx;
+  ctx.config.update_from_map({
+    {"sloppiness", "modules"}
+  });
+  ctx.config.set_depend_mode(true);
+  REQUIRE(util::write_file("foo.cpp", ""));
+
+  ctx.orig_args = Args::from_string("gcc -fmodules -MD -c foo.cpp");
+
+  const auto result = process_args(ctx);
+
+  CHECK(result);
+}
+
 TEST_SUITE_END();

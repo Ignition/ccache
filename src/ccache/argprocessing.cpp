@@ -91,6 +91,7 @@ public:
   bool found_wp_md_or_mmd_opt = false;
   bool found_md_or_mmd_opt = false;
   bool found_Wa_a_opt = false;
+  bool found_fmodules = false;
   bool rewrite_FI_args = false;
   bool output_sarif_is_directory = false;
 
@@ -801,25 +802,11 @@ process_option_arg(const Context& ctx,
     return Statistic::none;
   }
 
-  // Modules are handled on demand as necessary in the background, so there is
-  // no need to cache them, they can in practice be ignored. All that is needed
-  // is to correctly depend also on module.modulemap files, and those are
-  // included only in depend mode (preprocessed output does not list them).
-  // Still, not including the modules themselves in the hash could possibly
-  // result in an object file that would be different from the actual
-  // compilation (even though it should be compatible), so require a sloppiness
-  // flag.
+  // The files a module compilation reads are named in the dependency
+  // information rather than on the command line, so whether it can be cached
+  // depends on arguments that may not have been seen yet.
   if (arg == "-fmodules") {
-    if (!config.depend_mode() || !config.direct_mode()) {
-      LOG("Compiler option {} is unsupported without direct depend mode",
-          args[i]);
-      return Statistic::could_not_use_modules;
-    } else if (!(config.sloppiness().contains(core::Sloppy::modules))) {
-      LOG(
-        "You have to specify \"modules\" sloppiness when using"
-        " -fmodules to get hits");
-      return Statistic::could_not_use_modules;
-    }
+    state.found_fmodules = true;
   }
 
   if (arg == "-c" || arg == "--compile") { // --compile is NVCC
@@ -2200,6 +2187,27 @@ process_args(Context& ctx)
       state.add_compiler_only_arg_no_hash("/showIncludes");
     }
 #endif
+  }
+
+  if (state.found_fmodules) {
+    // Depend mode is what records the module files a compilation reads, and it
+    // is only in effect when the compilation writes dependency information.
+    // Without it nothing describing the imported modules is hashed, so a
+    // changed module would be served from the cache.
+    const bool depend_mode_in_effect =
+      ctx.config.depend_mode()
+      && (args_info.generating_dependencies || args_info.generating_includes);
+    if (!depend_mode_in_effect || !ctx.config.direct_mode()) {
+      LOG(
+        "Compiler option -fmodules is unsupported without direct depend mode");
+      return tl::unexpected(Statistic::could_not_use_modules);
+    }
+    if (!ctx.config.sloppiness().contains(core::Sloppy::modules)) {
+      LOG(
+        "You have to specify \"modules\" sloppiness when using"
+        " -fmodules to get hits");
+      return tl::unexpected(Statistic::could_not_use_modules);
+    }
   }
 
   if (state.found_c_opt) {
