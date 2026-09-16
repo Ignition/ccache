@@ -84,6 +84,26 @@ SUITE_gcc_modules() {
     expect_stat cache_miss 1
 
     # -------------------------------------------------------------------------
+    TEST "compiling a module interface leaves a usable BMI"
+
+    # The binary module interface is a second output of the compilation and is
+    # not stored in the cache, so a compilation that is served from the cache
+    # would leave the build without a module for consumers to import.
+    CCACHE_SLOPPINESS="$DEFAULT_SLOPPINESS modules" $CCACHE_COMPILE \
+        -std=c++20 -fmodules -MD -MF module.d -x c++ -c module.cppm -o module.o
+    rm -rf gcm.cache module.o
+
+    CCACHE_SLOPPINESS="$DEFAULT_SLOPPINESS modules" $CCACHE_COMPILE \
+        -std=c++20 -fmodules -MD -MF module.d -x c++ -c module.cppm -o module.o
+    expect_exists gcm.cache/somemodule.gcm
+
+    CCACHE_SLOPPINESS="$DEFAULT_SLOPPINESS modules" $CCACHE_COMPILE \
+        -std=c++20 -fmodules -MD -MF main.d -c main.cpp -o main.o
+    $COMPILER main.o module.o -o prog
+    ./prog
+    expect_equal_text_content <(echo 1) <(echo $?)
+
+    # -------------------------------------------------------------------------
     TEST "no sloppiness is uncacheable"
 
     $CCACHE_COMPILE -std=c++20 -fmodules -MD -MF main.d -c main.cpp -o main.o
