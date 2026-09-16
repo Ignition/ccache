@@ -1181,7 +1181,7 @@ NOTE: No effect with `--coverage` (it implies `-fprofile-arcs`).
 
 *modules*::
 
-    *Use case*: Clang builds using `-fmodules` or
+    *Use case*: Builds using `-fmodules`, or Clang builds using
     `-fprebuilt-implicit-modules`. +
     *Effect*: Allows caching when C++ modules are used. +
     *Trade-off*: May not detect changes in module internal state, or in
@@ -2003,21 +2003,32 @@ Troubleshooting:
 
 == C++ modules
 
-Ccache does currently not support standard C++20 modules.
-
-There is however limited support for "`Clang modules`" (the `-fmodules` option)
-with these requirements:
+The `-fmodules` option selects "`Clang modules`" and, on GCC, standard C++20
+named modules. Both have these requirements:
 
 * Set <<config_sloppiness,*sloppiness*>> to `modules`.
 * Enable both <<The direct mode,*direct mode*>> and <<The depend mode,*depend
   mode*>>.
+* Write dependency information, for example with `-MD`. This is what tells
+  ccache which module files the compilation reads. A compilation that writes
+  none is counted as "`Could not use modules`".
 
-This is how it works:
+For Clang modules:
 
 * Ccache hashes `module.modulemap` files but ignores Clang's binary module
   cache.
 * This works because identical `module.modulemap` files should produce
   compatible cached results.
+
+For GCC named modules:
+
+* GCC names the binary module interfaces that an import resolves to in the
+  dependency information, and ccache hashes them, so a consumer is recompiled
+  when a module it imports changes.
+* Compiling a module interface also writes the interface itself, which ccache
+  does not store. Such a compilation is not served from the cache while that
+  interface is missing from the build tree, so the module remains available to
+  consumers.
 
 NOTE: The preprocessor mode doesn't provide enough information for module
 support <<The depend mode,*depend mode*>>. When using <<The preprocessor
