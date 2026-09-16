@@ -386,6 +386,14 @@ remember_include_file(Context& ctx,
     return {};
   }
 
+  if (path_str.str().ends_with(".c++-module")) {
+    // GCC lists the name of each module a compilation imports beside the
+    // binary module interfaces it reads. The name stands for a module rather
+    // than a file, and the interface it resolves to is listed in the same
+    // dependency file.
+    return {};
+  }
+
   if (system
       && ctx.config.sloppiness().contains(core::Sloppy::system_headers)) {
     // Don't remember this system header.

@@ -71,6 +71,19 @@ SUITE_gcc_modules() {
     expect_equal_text_content <(echo 42) <(echo $?)
 
     # -------------------------------------------------------------------------
+    TEST "cache hit against an unchanged module"
+
+    CCACHE_SLOPPINESS="$DEFAULT_SLOPPINESS modules" $CCACHE_COMPILE \
+        -std=c++20 -fmodules -MD -MF main.d -c main.cpp -o main.o
+    expect_stat direct_cache_hit 0
+    expect_stat cache_miss 1
+
+    CCACHE_SLOPPINESS="$DEFAULT_SLOPPINESS modules" $CCACHE_COMPILE \
+        -std=c++20 -fmodules -MD -MF main.d -c main.cpp -o main.o
+    expect_stat direct_cache_hit 1
+    expect_stat cache_miss 1
+
+    # -------------------------------------------------------------------------
     TEST "no sloppiness is uncacheable"
 
     $CCACHE_COMPILE -std=c++20 -fmodules -MD -MF main.d -c main.cpp -o main.o
