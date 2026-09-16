@@ -2026,9 +2026,13 @@ For GCC named modules:
   dependency information, and ccache hashes them, so a consumer is recompiled
   when a module it imports changes.
 * Compiling a module interface also writes the interface itself, which ccache
-  does not store. Such a compilation is not served from the cache while that
-  interface is missing from the build tree, so the module remains available to
-  consumers.
+  does not store. Such a compilation is never served from the cache, so the
+  module stays available to consumers, and only compilations that import a
+  module benefit.
+* GCC records a timestamp in the interface, so recompiling one yields different
+  bytes for the same source. A consumer hits only while the interfaces it
+  imports are left in place, as in an incremental build; one that rebuilds them
+  gets a miss.
 
 NOTE: The preprocessor mode doesn't provide enough information for module
 support <<The depend mode,*depend mode*>>. When using <<The preprocessor

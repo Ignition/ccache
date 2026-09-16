@@ -84,17 +84,19 @@ SUITE_gcc_modules() {
     expect_stat cache_miss 1
 
     # -------------------------------------------------------------------------
-    TEST "compiling a module interface leaves a usable BMI"
+    TEST "compiling a module interface is never served from the cache"
 
-    # The binary module interface is a second output of the compilation and is
-    # not stored in the cache, so a compilation that is served from the cache
-    # would leave the build without a module for consumers to import.
+    # The binary module interface is a second output of compiling a module
+    # interface and is not stored in the cache, so a compilation served from
+    # the cache would leave the build with no module for consumers to import.
+    # Serving one requires storing the interface alongside the object file.
     CCACHE_SLOPPINESS="$DEFAULT_SLOPPINESS modules" $CCACHE_COMPILE \
         -std=c++20 -fmodules -MD -MF module.d -x c++ -c module.cppm -o module.o
     rm -rf gcm.cache module.o
 
     CCACHE_SLOPPINESS="$DEFAULT_SLOPPINESS modules" $CCACHE_COMPILE \
         -std=c++20 -fmodules -MD -MF module.d -x c++ -c module.cppm -o module.o
+    expect_stat direct_cache_hit 0
     expect_exists gcm.cache/somemodule.gcm
 
     CCACHE_SLOPPINESS="$DEFAULT_SLOPPINESS modules" $CCACHE_COMPILE \
