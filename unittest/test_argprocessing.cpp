@@ -1657,4 +1657,58 @@ TEST_CASE("-fprebuilt-implicit-modules is cacheable with modules sloppiness")
   CHECK(result);
 }
 
+TEST_CASE("-fprebuilt-module-path= is rewritten if basedir is used")
+{
+  TestContext test_context;
+  Context ctx;
+  ctx.config.set_base_dir(get_root());
+  REQUIRE(util::write_file("foo.cpp", ""));
+  REQUIRE(fs::create_directory("pm"));
+
+  ctx.orig_args = Args::from_string(
+    FMT("clang -fprebuilt-module-path={}/pm -c foo.cpp", ctx.actual_cwd));
+
+  const auto result = process_args(ctx);
+
+  // The path of the directory is otherwise part of the hash, which stops two
+  // checkouts of the same source from sharing an entry.
+  REQUIRE(result);
+  CHECK(result->preprocessor_args[1] == "-fprebuilt-module-path=pm");
+}
+
+TEST_CASE("-fmodule-file= is rewritten if basedir is used")
+{
+  TestContext test_context;
+  Context ctx;
+  ctx.config.set_base_dir(get_root());
+  REQUIRE(util::write_file("foo.cpp", ""));
+  REQUIRE(util::write_file("a.pcm", ""));
+
+  ctx.orig_args = Args::from_string(
+    FMT("clang -fmodule-file={}/a.pcm -c foo.cpp", ctx.actual_cwd));
+
+  const auto result = process_args(ctx);
+
+  REQUIRE(result);
+  CHECK(result->preprocessor_args[1] == "-fmodule-file=a.pcm");
+}
+
+TEST_CASE("-fmodule-file= keeps the module name when rewritten")
+{
+  TestContext test_context;
+  Context ctx;
+  ctx.config.set_base_dir(get_root());
+  REQUIRE(util::write_file("foo.cpp", ""));
+  REQUIRE(util::write_file("a.pcm", ""));
+
+  // A module name may itself contain a colon, as a partition does.
+  ctx.orig_args = Args::from_string(
+    FMT("clang -fmodule-file=m:part={}/a.pcm -c foo.cpp", ctx.actual_cwd));
+
+  const auto result = process_args(ctx);
+
+  REQUIRE(result);
+  CHECK(result->preprocessor_args[1] == "-fmodule-file=m:part=a.pcm");
+}
+
 TEST_SUITE_END();

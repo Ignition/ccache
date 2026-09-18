@@ -1269,7 +1269,13 @@ process_option_arg(const Context& ctx,
       args_info.searched_module_files.push_back(std::move(module_file));
     }
 
-    state.add_common_arg(args[i]);
+    if (dir_arg.empty()) {
+      state.add_common_arg(args[i]);
+    } else {
+      state.add_common_arg(FMT("{}{}",
+                               prebuilt_module_path_flag,
+                               core::make_relative_path(ctx, dir_arg)));
+    }
     return Statistic::none;
   }
 
@@ -1278,11 +1284,14 @@ process_option_arg(const Context& ctx,
     // module imports.
     constexpr std::string_view module_file_flag = "-fmodule-file=";
     auto value = std::string_view(arg).substr(module_file_flag.size());
+    std::string_view name; // "<name>=", kept as written
     if (auto sep = value.find('='); sep != std::string_view::npos) {
-      value = value.substr(sep + 1); // drop the optional "<name>=" prefix
+      name = value.substr(0, sep + 1);
+      value = value.substr(sep + 1);
     }
-    args_info.module_files.emplace_back(value);
-    state.add_common_arg(args[i]);
+    const auto path = core::make_relative_path(ctx, value);
+    args_info.module_files.emplace_back(path);
+    state.add_common_arg(FMT("{}{}{}", module_file_flag, name, path));
     return Statistic::none;
   }
 
