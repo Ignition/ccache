@@ -84,6 +84,33 @@ SUITE_gcc_modules() {
     expect_stat cache_miss 1
 
     # -------------------------------------------------------------------------
+    TEST "changed module interface is not served from the cache with -MP"
+
+    # -MP gives the binary module interface a rule of its own, which states no
+    # prerequisite and so names no output. Reading it as one would refuse the
+    # consumption as a compilation that writes an interface.
+    CCACHE_SLOPPINESS="$DEFAULT_SLOPPINESS modules" $CCACHE_COMPILE \
+        -std=c++20 -fmodules -MP -MMD -MF main.d -c main.cpp -o main.o
+    expect_stat could_not_use_modules 0
+    expect_stat cache_miss 1
+    $COMPILER main.o module.o -o prog
+    ./prog
+    expect_equal_text_content <(echo 1) <(echo $?)
+
+    CCACHE_SLOPPINESS="$DEFAULT_SLOPPINESS modules" $CCACHE_COMPILE \
+        -std=c++20 -fmodules -MP -MMD -MF main.d -c main.cpp -o main.o
+    expect_stat direct_cache_hit 1
+
+    generate_module 42
+
+    CCACHE_SLOPPINESS="$DEFAULT_SLOPPINESS modules" $CCACHE_COMPILE \
+        -std=c++20 -fmodules -MP -MMD -MF main.d -c main.cpp -o main.o
+    expect_stat direct_cache_hit 1
+    $COMPILER main.o module.o -o prog
+    ./prog
+    expect_equal_text_content <(echo 42) <(echo $?)
+
+    # -------------------------------------------------------------------------
     TEST "cache hit for a unit importing a module partition"
 
     # GCC names a partition somemodule:part.c++-module, whose colon does not
