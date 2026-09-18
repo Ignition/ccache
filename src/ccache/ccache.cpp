@@ -386,14 +386,6 @@ remember_include_file(Context& ctx,
     return {};
   }
 
-  if (path_str.str().ends_with(".c++-module")) {
-    // GCC lists the name of each module a compilation imports beside the
-    // binary module interfaces it reads. The name stands for a module rather
-    // than a file, and the interface it resolves to is listed in the same
-    // dependency file.
-    return {};
-  }
-
   if (system
       && ctx.config.sloppiness().contains(core::Sloppy::system_headers)) {
     // Don't remember this system header.
@@ -803,18 +795,15 @@ result_key_from_depfile(Context& ctx, Hash& hash)
     }
   }
 
-  bool seen_colon = false;
-  for (std::string_view token : depfile::tokenize(*file_content)) {
-    if (token.empty()) {
-      seen_colon = false;
+  for (const auto& input_file : depfile.input_files()) {
+    // GCC lists the name of each module a compilation imports beside the
+    // binary module interfaces it reads. The name stands for a module rather
+    // than a file, and the interface it resolves to is listed as well.
+    if (input_file.ends_with(".c++-module")) {
       continue;
     }
-    if (seen_colon) {
-      fs::path path = core::make_relative_path(ctx, token);
-      TRY(remember_include_file(ctx, path, hash, false, &hash));
-    } else if (token == ":") {
-      seen_colon = true;
-    }
+    fs::path path = core::make_relative_path(ctx, input_file);
+    TRY(remember_include_file(ctx, path, hash, false, &hash));
   }
 
   // Explicitly check the .gch/.pch/.pth file as it may not be mentioned in the
