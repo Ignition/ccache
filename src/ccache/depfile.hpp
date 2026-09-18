@@ -29,6 +29,30 @@ class Context;
 
 namespace depfile {
 
+// The rules of a dependency file, in terms of what a compilation read.
+//
+// Makefile syntax states more than a list of files: a rule names targets as
+// well as prerequisites, and marks the prerequisites that only order the build
+// rather than being read. A compiler writes all of these, so reading the
+// prerequisites alone would treat a compilation's own outputs as its inputs.
+class Depfile
+{
+public:
+  static Depfile parse(std::string_view text);
+
+  // The files the compilation read: the prerequisites of every rule, without
+  // those that the file itself names as a target or marks as order-only. Each
+  // file appears once, in the order first named.
+  const std::vector<std::string>& input_files() const;
+
+  // The files the compilation writes.
+  const std::vector<std::string>& targets() const;
+
+private:
+  std::vector<std::string> m_input_files;
+  std::vector<std::string> m_targets;
+};
+
 std::string escape_filename(std::string_view filename);
 
 std::optional<std::string> rewrite_source_paths(const Context& ctx,

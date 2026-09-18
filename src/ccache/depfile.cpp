@@ -38,6 +38,57 @@ namespace fs = util::filesystem;
 
 namespace depfile {
 
+Depfile
+Depfile::parse(std::string_view text)
+{
+  Depfile depfile;
+  std::vector<std::string> prerequisites;
+
+  // Within a rule, the first colon separates the targets from the
+  // prerequisites, and a pipe marks the prerequisites after it as ordering the
+  // build rather than being read.
+  bool in_prerequisites = false;
+  bool order_only = false;
+
+  for (auto& token : tokenize(text)) {
+    if (token.empty()) {
+      in_prerequisites = false;
+      order_only = false;
+    } else if (token == ":") {
+      in_prerequisites = true;
+    } else if (in_prerequisites && token == "|") {
+      order_only = true;
+    } else if (!in_prerequisites) {
+      depfile.m_targets.push_back(std::move(token));
+    } else if (!order_only) {
+      prerequisites.push_back(std::move(token));
+    }
+  }
+
+  for (auto& prerequisite : prerequisites) {
+    const auto names = [&](const std::vector<std::string>& v) {
+      return std::find(v.begin(), v.end(), prerequisite) != v.end();
+    };
+    if (!names(depfile.m_targets) && !names(depfile.m_input_files)) {
+      depfile.m_input_files.push_back(std::move(prerequisite));
+    }
+  }
+
+  return depfile;
+}
+
+const std::vector<std::string>&
+Depfile::input_files() const
+{
+  return m_input_files;
+}
+
+const std::vector<std::string>&
+Depfile::targets() const
+{
+  return m_targets;
+}
+
 std::string
 escape_filename(std::string_view filename)
 {

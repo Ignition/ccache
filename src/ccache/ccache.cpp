@@ -788,6 +788,21 @@ result_key_from_depfile(Context& ctx, Hash& hash)
     return tl::unexpected(Statistic::bad_input_file);
   }
 
+  const auto depfile = depfile::Depfile::parse(*file_content);
+
+  // A compilation that writes a binary module interface names it as a target.
+  // The interface is a second output that the cache does not store, so serving
+  // such a compilation from the cache would leave the build with no module for
+  // consumers to import.
+  for (const auto& target : depfile.targets()) {
+    if (fs::path(target).extension() == ".gcm") {
+      LOG("Dependency file {} names the module interface {} as an output",
+          ctx.args_info.output_dep,
+          target);
+      return tl::unexpected(Statistic::could_not_use_modules);
+    }
+  }
+
   bool seen_colon = false;
   for (std::string_view token : depfile::tokenize(*file_content)) {
     if (token.empty()) {

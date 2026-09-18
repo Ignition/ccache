@@ -509,4 +509,66 @@ TEST_CASE("depfile::untokenize")
             " bar.h\n"));
 }
 
+TEST_CASE("depfile::Depfile")
+{
+  using std::vector;
+
+  SUBCASE("Targets and prerequisites")
+  {
+    const auto d = depfile::Depfile::parse("foo.o: foo.c foo.h\n");
+    CHECK(d.targets() == vector<std::string>{"foo.o"});
+    CHECK(d.input_files() == vector<std::string>{"foo.c", "foo.h"});
+  }
+
+  SUBCASE("Several targets in one rule")
+  {
+    const auto d = depfile::Depfile::parse("foo.o foo.gcm: foo.cppm\n");
+    CHECK(d.targets() == vector<std::string>{"foo.o", "foo.gcm"});
+    CHECK(d.input_files() == vector<std::string>{"foo.cppm"});
+  }
+
+  SUBCASE("An order-only prerequisite is not an input")
+  {
+    // The compilation is ordered after the file rather than reading it.
+    const auto d = depfile::Depfile::parse("foo.gcm:| foo.o\n");
+    CHECK(d.targets() == vector<std::string>{"foo.gcm"});
+    CHECK(d.input_files().empty());
+  }
+
+  SUBCASE("A target of the file is not an input")
+  {
+    // A compilation does not read what it writes, so hashing it would derive
+    // the key from the compilation's own output.
+    const auto d = depfile::Depfile::parse(
+      "foo.o foo.gcm: foo.cppm\n"
+      "foo.c++-module: foo.gcm\n");
+    CHECK(d.input_files() == vector<std::string>{"foo.cppm"});
+  }
+
+  SUBCASE("A prerequisite named in two rules appears once")
+  {
+    const auto d = depfile::Depfile::parse(
+      "a.o: shared.h\n"
+      "a.o: shared.h other.h\n");
+    CHECK(d.input_files() == vector<std::string>{"shared.h", "other.h"});
+  }
+
+  SUBCASE("A GCC module interface dependency file")
+  {
+    const auto d = depfile::Depfile::parse(
+      "a.o gcm.cache/a.gcm: a.cppm stdc-predef.h\n"
+      "a.c++-module: gcm.cache/a.gcm\n"
+      ".PHONY: a.c++-module\n"
+      "gcm.cache/a.gcm:| a.o\n");
+    CHECK(d.input_files() == vector<std::string>{"a.cppm", "stdc-predef.h"});
+  }
+
+  SUBCASE("Empty content")
+  {
+    const auto d = depfile::Depfile::parse("");
+    CHECK(d.targets().empty());
+    CHECK(d.input_files().empty());
+  }
+}
+
 TEST_SUITE_END();

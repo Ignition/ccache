@@ -124,15 +124,20 @@ EOF
     # Serving one requires storing the interface alongside the object file.
     CCACHE_SLOPPINESS="$DEFAULT_SLOPPINESS modules" $CCACHE_COMPILE \
         -std=c++20 -fmodules -MD -MF module.d -x c++ -c module.cppm -o module.o
+    expect_stat could_not_use_modules 1
     rm -rf gcm.cache module.o
 
     CCACHE_SLOPPINESS="$DEFAULT_SLOPPINESS modules" $CCACHE_COMPILE \
         -std=c++20 -fmodules -MD -MF module.d -x c++ -c module.cppm -o module.o
+    expect_stat could_not_use_modules 2
     expect_stat direct_cache_hit 0
     expect_exists gcm.cache/somemodule.gcm
 
+    # A consumer names the same interface as a prerequisite rather than a
+    # target, and still caches.
     CCACHE_SLOPPINESS="$DEFAULT_SLOPPINESS modules" $CCACHE_COMPILE \
         -std=c++20 -fmodules -MD -MF main.d -c main.cpp -o main.o
+    expect_stat could_not_use_modules 2
     $COMPILER main.o module.o -o prog
     ./prog
     expect_equal_text_content <(echo 1) <(echo $?)
