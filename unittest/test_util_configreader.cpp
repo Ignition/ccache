@@ -98,6 +98,40 @@ TEST_SUITE("util::ConfigReader")
     CHECK(item.value == "b c");
   }
 
+  TEST_CASE("read_next_item: empty value followed by another key")
+  {
+    // Only an indented line continues a value, so the next key states that the
+    // value is empty rather than continuing it.
+    ConfigReader reader("key1 =\nkey2 = value2\n");
+    auto result1 = reader.read_next_item();
+    REQUIRE(result1);
+    auto& item1 = **result1;
+    CHECK(item1.key == "key1");
+    CHECK(item1.value == "");
+
+    auto result2 = reader.read_next_item();
+    REQUIRE(result2);
+    auto& item2 = **result2;
+    CHECK(item2.key == "key2");
+    CHECK(item2.value == "value2");
+  }
+
+  TEST_CASE("read_next_item: empty value with trailing space before a key")
+  {
+    ConfigReader reader("key1 = \nkey2 = value2\n");
+    auto result1 = reader.read_next_item();
+    REQUIRE(result1);
+    auto& item1 = **result1;
+    CHECK(item1.key == "key1");
+    CHECK(item1.value == "");
+
+    auto result2 = reader.read_next_item();
+    REQUIRE(result2);
+    auto& item2 = **result2;
+    CHECK(item2.key == "key2");
+    CHECK(item2.value == "value2");
+  }
+
   TEST_CASE("read_next_item: comments are skipped")
   {
     ConfigReader reader("key = a\n  b\n# comment\n  c");

@@ -108,7 +108,11 @@ ConfigReader::ConfigReader(std::string_view config)
     }
     size_t value_end = last_line_start + last_line_size;
 
-    item.value_length = value_end - item.value_start_pos;
+    // The search for the start of the value skips the newline, so that an
+    // indented line below the key can hold it. Where the line below states a
+    // key of its own it continues nothing, leaving the start past the end.
+    item.value_length =
+      value_end > item.value_start_pos ? value_end - item.value_start_pos : 0;
   }
 }
 
