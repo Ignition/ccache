@@ -299,6 +299,29 @@ TEST_CASE("depfile::tokenize")
     CHECK(result[3] == "");
   }
 
+  SUBCASE("Colon in a prerequisite")
+  {
+    // A rule is separated by its first colon, so a later one is an ordinary
+    // character. GCC names a module partition that way.
+    auto result = depfile::tokenize("cat.o: somemodule:part.c++-module");
+    REQUIRE(result.size() == 4);
+    CHECK(result[0] == "cat.o");
+    CHECK(result[1] == ":");
+    CHECK(result[2] == "somemodule:part.c++-module");
+    CHECK(result[3] == "");
+  }
+
+  SUBCASE("Colon in a prerequisite of a later entry")
+  {
+    // Each entry is separated by its own first colon.
+    auto result = depfile::tokenize("a.o: x:y\nb.o: p:q");
+    REQUIRE(result.size() == 8);
+    CHECK(result[2] == "x:y");
+    CHECK(result[4] == "b.o");
+    CHECK(result[5] == ":");
+    CHECK(result[6] == "p:q");
+  }
+
   SUBCASE("Windows filename (with backslashes in target)")
   {
     auto result = depfile::tokenize("e:\\cat.o: meow");
@@ -389,16 +412,17 @@ TEST_CASE("depfile::tokenize")
     CHECK(result[3] == "");
   }
 
-  // Invalid pattern but tested for documentative purposes.
+  // Invalid pattern but tested for documentative purposes. Make reads the
+  // second colon as introducing a static pattern rule and rejects it; a
+  // compiler does not write one, so it is read as part of the file name.
   SUBCASE("Windows filename: cat:c:")
   {
     auto result = depfile::tokenize("cat:c:");
-    REQUIRE(result.size() == 5);
+    REQUIRE(result.size() == 4);
     CHECK(result[0] == "cat");
     CHECK(result[1] == ":");
-    CHECK(result[2] == "c");
-    CHECK(result[3] == ":");
-    CHECK(result[4] == "");
+    CHECK(result[2] == "c:");
+    CHECK(result[3] == "");
   }
 
   // Invalid pattern but tested for documentative purposes.
@@ -422,17 +446,15 @@ TEST_CASE("depfile::tokenize")
     CHECK(result[3] == "");
   }
 
-  // Invalid pattern but tested for documentative purposes.
+  // Invalid pattern but tested for documentative purposes, as above.
   SUBCASE("Windows filename: cat:c:meow")
   {
     auto result = depfile::tokenize("cat:c:meow");
-    REQUIRE(result.size() == 6);
+    REQUIRE(result.size() == 4);
     CHECK(result[0] == "cat");
     CHECK(result[1] == ":");
-    CHECK(result[2] == "c");
-    CHECK(result[3] == ":");
-    CHECK(result[4] == "meow");
-    CHECK(result[5] == "");
+    CHECK(result[2] == "c:meow");
+    CHECK(result[3] == "");
   }
 
   SUBCASE("Windows filename: c:c:/meow")
@@ -465,17 +487,15 @@ TEST_CASE("depfile::tokenize")
     CHECK(result[3] == "");
   }
 
-  // Invalid pattern but tested for documentative purposes.
+  // Invalid pattern but tested for documentative purposes, as above.
   SUBCASE("Windows filename: c:cd:\\meow")
   {
     auto result = depfile::tokenize("c:cd:\\meow");
-    REQUIRE(result.size() == 6);
+    REQUIRE(result.size() == 4);
     CHECK(result[0] == "c");
     CHECK(result[1] == ":");
-    CHECK(result[2] == "cd");
-    CHECK(result[3] == ":");
-    CHECK(result[4] == "\\meow");
-    CHECK(result[5] == "");
+    CHECK(result[2] == "cd:\\meow");
+    CHECK(result[3] == "");
   }
 }
 
