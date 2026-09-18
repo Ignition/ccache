@@ -142,11 +142,17 @@ tokenize(std::string_view text)
   // Thus, if there is a colon and the previous token is one character long and
   // the following character is a slash (forward or backward), then it is
   // interpreted as a Windows path.
+  //
+  // A rule is separated by its first colon, so any later one is read as part of
+  // a file name. Make instead reads it as introducing a static pattern rule and
+  // rejects the cases above that say so, but a compiler does not write one, and
+  // GCC names a module partition somemodule:part.c++-module.
 
   std::vector<std::string> tokens;
   const size_t length = text.size();
 
   size_t i = 0;
+  bool separator_seen = false;
 
   while (true) {
     // Find start of next token.
@@ -163,12 +169,14 @@ tokenize(std::string_view text)
         // Reached the end.
         break;
       }
+      separator_seen = false;
       ++i;
       continue;
     }
 
-    if (text[i] == ':') {
+    if (text[i] == ':' && !separator_seen) {
       tokens.emplace_back(":");
+      separator_seen = true;
       ++i;
       continue;
     }
@@ -182,16 +190,22 @@ tokenize(std::string_view text)
     // Parse token.
     std::string token;
     while (i < length) {
-      if (text[i] == ':' && token.length() == 1 && !util::is_space(token[0])
-          && i + 1 < length && (text[i + 1] == '/' || text[i + 1] == '\\')) {
-        // It's a Windows path, so the colon is not a separator and instead
-        // added to the token.
-        token += text[i];
-        ++i;
-        continue;
+      if (text[i] == ':') {
+        const bool windows_path =
+          token.length() == 1 && !util::is_space(token[0]) && i + 1 < length
+          && (text[i + 1] == '/' || text[i + 1] == '\\');
+        if (separator_seen || windows_path) {
+          // The colon belongs to the file name rather than separating the
+          // rule, so it is added to the token.
+          token += text[i];
+          ++i;
+          continue;
+        }
+        // End of token.
+        break;
       }
 
-      if (text[i] == ':' || util::is_space(text[i])
+      if (util::is_space(text[i])
           || (text[i] == '\\' && i + 1 < length && text[i + 1] == '\n')) {
         // End of token.
         break;

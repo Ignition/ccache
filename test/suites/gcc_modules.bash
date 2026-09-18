@@ -84,6 +84,38 @@ SUITE_gcc_modules() {
     expect_stat cache_miss 1
 
     # -------------------------------------------------------------------------
+    TEST "cache hit for a unit importing a module partition"
+
+    # GCC names a partition somemodule:part.c++-module, whose colon does not
+    # separate a rule.
+    cat <<'EOF' >part.cppm
+export module somemodule:part;
+export constexpr int part_value = 7;
+EOF
+    cat <<'EOF' >iface.cppm
+export module somemodule;
+export import :part;
+EOF
+    cat <<'EOF' >impl.cpp
+module somemodule;
+import :part;
+int impl_value() { return part_value; }
+EOF
+    rm -rf gcm.cache
+    $COMPILER -std=c++20 -fmodules -x c++ -c part.cppm -o part.o
+    $COMPILER -std=c++20 -fmodules -x c++ -c iface.cppm -o iface.o
+
+    CCACHE_SLOPPINESS="$DEFAULT_SLOPPINESS modules" $CCACHE_COMPILE \
+        -std=c++20 -fmodules -MD -MF impl.d -c impl.cpp -o impl.o
+    expect_stat direct_cache_hit 0
+    expect_stat cache_miss 1
+
+    CCACHE_SLOPPINESS="$DEFAULT_SLOPPINESS modules" $CCACHE_COMPILE \
+        -std=c++20 -fmodules -MD -MF impl.d -c impl.cpp -o impl.o
+    expect_stat direct_cache_hit 1
+    expect_stat cache_miss 1
+
+    # -------------------------------------------------------------------------
     TEST "compiling a module interface is never served from the cache"
 
     # The binary module interface is a second output of compiling a module
