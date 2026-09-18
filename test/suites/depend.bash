@@ -126,6 +126,26 @@ SUITE_depend() {
     expect_stat files_in_cache 2
 
     # -------------------------------------------------------------------------
+    TEST "Changed header"
+
+    # -MP gives each header a rule of its own, which states no prerequisite and
+    # so names no output. A header reached that way is still read by the
+    # compilation and belongs in the hash.
+    CCACHE_DEPEND=1 $CCACHE_COMPILE $DEPSFLAGS_CCACHE -c test.c
+    expect_stat direct_cache_hit 0
+    expect_stat cache_miss 1
+
+    cat <<EOF >test3.h
+int test3;
+int test3_too;
+EOF
+    backdate test3.h
+
+    CCACHE_DEPEND=1 $CCACHE_COMPILE $DEPSFLAGS_CCACHE -c test.c
+    expect_stat direct_cache_hit 0
+    expect_stat cache_miss 2
+
+    # -------------------------------------------------------------------------
     TEST "No dependency file"
 
     CCACHE_DEPEND=1 $CCACHE_COMPILE -MP -MMD -MF /dev/null -c test.c

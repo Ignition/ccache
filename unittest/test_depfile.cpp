@@ -545,6 +545,24 @@ TEST_CASE("depfile::Depfile")
     CHECK(d.input_files() == vector<std::string>{"foo.cppm"});
   }
 
+  SUBCASE("A phony rule from -MP leaves its header an input")
+  {
+    // -MP names every header in a rule of its own so that a removed header
+    // does not stop the build. Such a rule states no output.
+    const auto d = depfile::Depfile::parse(
+      "t.o: t.c h.h\n"
+      "h.h:\n");
+    CHECK(d.input_files() == vector<std::string>{"t.c", "h.h"});
+  }
+
+  SUBCASE("A phony rule does not name an output")
+  {
+    const auto d = depfile::Depfile::parse(
+      "t.o: t.c h.h\n"
+      "h.h:\n");
+    CHECK(d.targets() == vector<std::string>{"t.o"});
+  }
+
   SUBCASE("A prerequisite named in two rules appears once")
   {
     const auto d = depfile::Depfile::parse(

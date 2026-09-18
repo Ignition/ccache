@@ -33,6 +33,7 @@
 #include <ccache/util/tokenizer.hpp>
 
 #include <algorithm>
+#include <unordered_set>
 
 namespace fs = util::filesystem;
 
@@ -47,30 +48,51 @@ Depfile::parse(std::string_view text)
   // Within a rule, the first colon separates the targets from the
   // prerequisites, and a pipe marks the prerequisites after it as ordering the
   // build rather than being read.
+  std::vector<std::string> rule_targets;
   bool in_prerequisites = false;
   bool order_only = false;
+  bool rule_states_prerequisites = false;
+
+  const auto end_of_rule = [&] {
+    if (rule_states_prerequisites) {
+      // A rule stating no prerequisite names no output: -MP writes one per
+      // header so that removing a header does not stop the build.
+      for (auto& target : rule_targets) {
+        depfile.m_targets.push_back(std::move(target));
+      }
+    }
+    rule_targets.clear();
+    in_prerequisites = false;
+    order_only = false;
+    rule_states_prerequisites = false;
+  };
 
   for (auto& token : tokenize(text)) {
     if (token.empty()) {
-      in_prerequisites = false;
-      order_only = false;
+      end_of_rule();
     } else if (token == ":") {
       in_prerequisites = true;
     } else if (in_prerequisites && token == "|") {
       order_only = true;
     } else if (!in_prerequisites) {
-      depfile.m_targets.push_back(std::move(token));
-    } else if (!order_only) {
-      prerequisites.push_back(std::move(token));
+      rule_targets.push_back(std::move(token));
+    } else {
+      rule_states_prerequisites = true;
+      if (!order_only) {
+        prerequisites.push_back(std::move(token));
+      }
     }
   }
+  end_of_rule();
 
-  for (auto& prerequisite : prerequisites) {
-    const auto names = [&](const std::vector<std::string>& v) {
-      return std::find(v.begin(), v.end(), prerequisite) != v.end();
-    };
-    if (!names(depfile.m_targets) && !names(depfile.m_input_files)) {
-      depfile.m_input_files.push_back(std::move(prerequisite));
+  // The views below borrow from m_targets and from prerequisites, neither of
+  // which is modified while they are in use.
+  const std::unordered_set<std::string_view> targets(depfile.m_targets.begin(),
+                                                     depfile.m_targets.end());
+  std::unordered_set<std::string_view> seen;
+  for (const auto& prerequisite : prerequisites) {
+    if (!targets.contains(prerequisite) && seen.insert(prerequisite).second) {
+      depfile.m_input_files.push_back(prerequisite);
     }
   }
 
